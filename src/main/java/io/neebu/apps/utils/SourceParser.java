@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.neebu.apps.proc;
+package io.neebu.apps.utils;
 
 import io.neebu.apps.core.entities.DynaEnum;
 import org.apache.commons.io.FilenameUtils;
