@@ -13,6 +13,10 @@ public class AppProperties {
 
     private List<String> moviePaths;
     private List<String> tvShowPaths;
+    private boolean parseMovies = false;
+    private boolean parseTv = false;
+    private boolean renameMovies = false;
+    private boolean renameTv = false;
     private String tmdbApiKey;
     private String tmdbApiUri;
     private String databaseUrl;
@@ -28,6 +32,10 @@ public class AppProperties {
             }
             // Load a properties file from class path, inside static method
             prop.load(input);
+            this.parseMovies = prop.getProperty("library.movies.enabled").equals("true");
+            this.parseTv = prop.getProperty("library.tv.enabled").equals("true");
+            this.renameMovies = prop.getProperty("library.movies.rename").equals("true");
+            this.renameTv = prop.getProperty("library.tv.rename").equals("true");
             this.moviePaths = Arrays.stream(prop.getProperty("library.movies.paths").split(",")).distinct().toList();
             this.tvShowPaths = Arrays.stream(prop.getProperty("library.tv.paths").split(",")).distinct().toList();
             this.tmdbApiKey = prop.getProperty("tmdb.api.key");

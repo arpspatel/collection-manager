@@ -4,12 +4,11 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 public class Constants {
-    public static final String     DELIMITER       = "[\\[\\](){} _,.-]";
-    public static final String OTT_PLATFORMS = "AMZN,ATVP,BMS,DSNP,GPLAY,HS,HULU,JC,JSTAR,MA,MX,NF,SM,SONY,YTUBE,ZEE5";
+    public static final String DELIMITER       = "[\\[\\](){} _,.-]";
+    public static final String OTT_PLATFORMS = "AMZN,ATVP,BMS,DSNP,GPLAY,HS,HULU,JC,JSTAR,MA,MX,NF,SM,SONY,YTUBE,ZEE5,iT";
     public static final String WEB_DL_DEFAULT = "Hybrid";
 
     public static final Set<String> VIDEO_EXTENSIONS = Set.of(".mkv", ".mp4", ".avi");
-
 
     // hard stopwords are words which will always be cleaned
     public static final String[] HARD_STOPWORDS  = { "1080", "1080i", "1080p", "2160p", "2160i", "3d", "480i", "480p", "576i", "576p", "360p",
@@ -31,11 +30,16 @@ public class Constants {
             "blu\\-ray", "dvd\\-rip" };
     public static final Pattern  TMDB_ID_PATTERN = Pattern.compile("(tmdbid|tmdb)[ ._-]?(\\d+)", Pattern.CASE_INSENSITIVE);
 
-    public static final String INSERT_SQL = "INSERT INTO movies (FILE_PATH, FILE_NAME, FILE_EXTENSION, MOVIE_NAME, MOVIE_YEAR, SOURCE_TYPE, SOURCE, TMDB_ID, GROUP_NAME, FILE_SIZE, RESOLUTION, HDR_FORMAT, VIDEO_CODEC, AUDIO_CODEC, AUDIO_CHANNELS, NORMALIZED_FILENAME, TMDB_TITLE, TMDB_RELEASE_DATE) \n" +
-            "VALUES ( ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
-    public static final String SELECT_SQL = "SELECT FILE_PATH FROM movies";
-    public static final String DELETE_SQL = "DELETE FROM movies WHERE FILE_PATH = ?";
-    public static final String SELECT_MOVIES_SQL = "SELECT FILE_PATH FROM collection WHERE collection_type = 'MOVIE'";
-    public static final String SELECT_TV_SQL = "SELECT FILE_PATH FROM collection WHERE collection_type = 'TV'";
+    public static final String SELECT_MOVIES_SQL = "SELECT absolute_path FILE_PATH FROM collection WHERE collection_type = 'MOVIE'";
+    public static final String SELECT_TV_SQL = "SELECT absolute_path FILE_PATH FROM collection WHERE collection_type = 'TV'";
 
+    public static final String INSERT_MEDIA_SQL = "INSERT INTO collection ( COLLECTION_TYPE ,ABSOLUTE_PATH ,FILE_NAME ,FILE_EXTENSION ,NAME ,SOURCE_TYPE ,SOURCE ,GROUP_NAME ,TMDB_ID ,RELEASE_YEAR ,FILE_SIZE ,RELEASE_DATE ,TMDB_NAME ,TMDB_DESCRIPTION ,SEASON_NUMBER ,EPISODE_NUMBER ,EPISODE_NAME ,EPISODE_OVERVIEW ,RESOLUTION ,HDR_FORMAT ,VIDEO_CODEC ,AUDIO_CODEC ,AUDIO_CHANNELS )\n" +
+            "VALUES ( ? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? )";
+    public static final String DELETE_MEDIA_SQL = "DELETE FROM collection WHERE ABSOLUTE_PATH = ?";
+
+
+    public enum CollectionType {
+        MOVIE,
+        TV
+    }
 }
