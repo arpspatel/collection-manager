@@ -1,7 +1,7 @@
 package io.neebu.apps.conn;
 
 import io.neebu.apps.core.entities.Constants;
-import io.neebu.apps.core.models.LibraryMovie;
+import io.neebu.apps.core.models.MediaFile;
 import lombok.SneakyThrows;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,55 +39,44 @@ public class DatabaseApp {
         return moviesDb;
     }
 
-    @Deprecated
     @SneakyThrows
-    public List<String> getMovies(){
-        List<String> moviesDb = new ArrayList<>();
-        Statement stmt = conn.createStatement();
-        ResultSet rs = stmt.executeQuery(Constants.SELECT_SQL);
-        while (rs.next()) {
-            moviesDb.add(rs.getString("FILE_PATH"));
-        }
-        rs.close();
-        stmt.close();
-        return moviesDb;
-    }
-
-
-    @Deprecated
-    @SneakyThrows
-    public void insert(LibraryMovie libraryMovie){
-        PreparedStatement statement = conn.prepareStatement(Constants.INSERT_SQL);
-        statement.setString(1, libraryMovie.getFilePath().toString());
-        statement.setString(2, libraryMovie.getBaseName());
-        statement.setString(3, libraryMovie.getFileExtension());
-        statement.setString(4, libraryMovie.getMovieName());
-        statement.setInt(5, libraryMovie.getMovieYear());
-        statement.setString(6, libraryMovie.getSourceType());
-        statement.setString(7, libraryMovie.getSource());
-        statement.setInt(8, libraryMovie.getTmdbMovie().getTmdbId());
-        statement.setString(9, libraryMovie.getGroupName());
-        statement.setLong(10, libraryMovie.getFileSize());
-        statement.setString(11, libraryMovie.getResolution());
-        statement.setString(12, libraryMovie.getHdrFormat());
-        statement.setString(13, libraryMovie.getVideoCodec());
-        statement.setString(14, libraryMovie.getAudioCodec());
-        statement.setString(15, libraryMovie.getAudioChannels());
-        statement.setString(16, libraryMovie.getRenamedFormat());
-        statement.setString(17, libraryMovie.getTmdbMovie().getTmdbName());
-        statement.setDate(18, Date.valueOf(libraryMovie.getTmdbMovie().getReleaseDate()));
+    public void insert(MediaFile mediaFile){
+        PreparedStatement statement = conn.prepareStatement(Constants.INSERT_MEDIA_SQL);
+        statement.setString(1,mediaFile.getCollectionType().toString());
+        statement.setString(2,mediaFile.getAbsolutePath().toString());
+        statement.setString(3,mediaFile.getBaseName());
+        statement.setString(4,mediaFile.getFileExtension());
+        statement.setString(5,mediaFile.getName());
+        statement.setString(6,mediaFile.getSourceType());
+        statement.setString(7,mediaFile.getSource());
+        statement.setString(8,mediaFile.getGroupName());
+        statement.setString(9,mediaFile.getTmdbId().toString());
+        if(mediaFile.getReleaseYear()==null) { statement.setNull(10, Types.INTEGER); } else {statement.setInt(10, mediaFile.getReleaseYear()); }
+        statement.setLong(11,mediaFile.getFileSize());
+        statement.setString(12,mediaFile.getReleaseDate());
+        statement.setString(13,mediaFile.getTmdbName());
+        statement.setString(14,mediaFile.getTmdbDescription());
+        statement.setString(15,mediaFile.getSeasonNumber());
+        statement.setString(16,mediaFile.getEpisodeNumber());
+        statement.setString(17,mediaFile.getEpisodeName());
+        statement.setString(18,mediaFile.getEpisodeOverview());
+        statement.setString(19,mediaFile.getResolution());
+        statement.setString(20,mediaFile.getHdrFormat());
+        statement.setString(21,mediaFile.getVideoCodec());
+        statement.setString(22,mediaFile.getAudioCodec());
+        statement.setString(23,mediaFile.getAudioChannels());
         statement.executeUpdate();
         conn.commit();
-        LOGGER.info("Inserted Record : {}",libraryMovie.getFilePath().toString());
+        LOGGER.info("Inserted Record : {}",mediaFile.getAbsolutePath().toString());
     }
 
-    @Deprecated
     @SneakyThrows
     public void delete(String filePath){
-        PreparedStatement statement = conn.prepareStatement(Constants.DELETE_SQL);
+        PreparedStatement statement = conn.prepareStatement(Constants.DELETE_MEDIA_SQL);
         statement.setString(1,filePath);
         statement.executeUpdate();
         conn.commit();
         LOGGER.info("Deleted Record : {}",filePath);
     }
+
 }

@@ -1,12 +1,14 @@
-package io.neebu.apps.pojos;
+package io.neebu.apps.core.models;
+
 
 import lombok.Getter;
 import lombok.Setter;
 
 @Getter
 @Setter
-public class TmdbMovie {
+public class TmdbTitle {
     private Integer tmdbId;
     private String tmdbName;
     private String releaseDate;
+    private String tmdbDescription;
 }
