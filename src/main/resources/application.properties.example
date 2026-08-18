@@ -1,0 +1,11 @@
+library.movies.enabled=true
+library.movies.paths=Y:/kids,Y:/others,Y:/hindi,Y:/english
+library.movies.rename=true
+library.tv.enabled=false
+library.tv.paths=Z:/english,Z:/hindi/Asur,Z:/hindi/Devon.Ke.Dev...Mahadev
+library.tv.rename=true
+tmdb.api.key=YOUR_TMDB_API_KEY
+tmdb.api.uri=https://api.themoviedb.org/3
+database.url=jdbc:mariadb://HOST:3306/dcollection
+database.user=YOUR_DB_USER
+database.pass=YOUR_DB_PASSWORD
