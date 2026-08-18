@@ -16,7 +16,7 @@ import java.util.*;
  * MediaParser extracts video and audio metadata from media files using MediaInfo.
  * It provides methods to retrieve codec, resolution, HDR format, and audio channel info.
  */
-public class MediaParser {
+public class MediaParser implements AutoCloseable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MediaParser.class);
 
@@ -25,6 +25,10 @@ public class MediaParser {
     private static final String CODEC_ID = "CodecID";
 
     private static final Set<String> ALLOWED_LANGUAGES = Set.of("en", "hi", "gu", "te", "ta", "ko", "ja", "zh", "mr","en-us","hi-in");
+
+    // Loading the native library binding is expensive - share one instance across files and threads.
+    // Each file still gets its own MediaInfoAccessor/MediaInfo, which hold the actual native handle.
+    private static final MediaInfoLibrary LIBRARY = MediaInfoLibrary.newInstance();
 
     private final MediaInfo mediaInfo;
 
@@ -35,8 +39,7 @@ public class MediaParser {
      */
     public MediaParser(Path filePath) throws IOException {
         LOGGER.debug("Initializing MediaParser for file: {}", filePath);
-        MediaInfoLibrary library = MediaInfoLibrary.newInstance();
-        MediaInfoAccessor accessor = new MediaInfoAccessor(library);
+        MediaInfoAccessor accessor = new MediaInfoAccessor(LIBRARY);
         this.mediaInfo = new MediaInfo(accessor).open(filePath.toFile());
 
         if (this.mediaInfo == null) {
@@ -193,5 +196,15 @@ public class MediaParser {
         }
     }
 
-
+    /**
+     * Releases the native MediaInfo handle for this file.
+     */
+    @Override
+    public void close() {
+        try {
+            mediaInfo.close();
+        } catch (Exception e) {
+            LOGGER.debug("Error closing MediaInfo handle: {}", e.getMessage());
+        }
+    }
 }

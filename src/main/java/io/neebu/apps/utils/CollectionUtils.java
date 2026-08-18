@@ -9,6 +9,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.Normalizer;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.function.Function;
 
 import static io.neebu.apps.core.entities.Constants.*;
 
@@ -77,6 +81,42 @@ public class CollectionUtils {
         }
 
         return fileNames;
+    }
+
+    /**
+     * Applies a mapper function to each item using a bounded thread pool, running independent
+     * per-item work (I/O, network calls) concurrently. A failing task is logged and its item
+     * dropped from the result rather than aborting the whole batch.
+     *
+     * @param items    Items to process.
+     * @param poolSize Number of worker threads.
+     * @param mapper   Function applied to each item; a null result is dropped.
+     * @return Non-null mapper results, in task-submission order.
+     */
+    public static <T, R> List<R> parallelMap(List<T> items, int poolSize, Function<T, R> mapper) {
+        if (items.isEmpty()) {
+            return List.of();
+        }
+
+        List<Future<R>> futures;
+        try (ExecutorService executor = Executors.newFixedThreadPool(poolSize)) {
+            futures = items.stream()
+                    .map(item -> executor.submit(() -> mapper.apply(item)))
+                    .toList();
+        }
+
+        List<R> results = new ArrayList<>();
+        for (Future<R> future : futures) {
+            try {
+                R result = future.get();
+                if (result != null) {
+                    results.add(result);
+                }
+            } catch (Exception e) {
+                LOGGER.error("Parallel task failed: {}", e.getMessage(), e);
+            }
+        }
+        return results;
     }
 
     /**

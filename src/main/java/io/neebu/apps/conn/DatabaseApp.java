@@ -67,45 +67,62 @@ public class DatabaseApp implements AutoCloseable {
     }
 
     /**
-     * Inserts a MediaFile record into the database.
-     * @param mediaFile MediaFile object to insert
+     * Inserts MediaFile records into the database in batches, committing once at the end.
+     * @param mediaFiles MediaFile objects to insert
      */
     @SneakyThrows
-    public void insert(MediaFile mediaFile){
-        LOGGER.debug("Inserting MediaFile: {}", mediaFile.getAbsolutePath());
+    public void insertBatch(List<MediaFile> mediaFiles){
+        if (mediaFiles.isEmpty()) {
+            return;
+        }
+        LOGGER.debug("Batch inserting {} MediaFile record(s)", mediaFiles.size());
         try (PreparedStatement statement = conn.prepareStatement(Constants.INSERT_MEDIA_SQL)) {
-            statement.setString(1,mediaFile.getCollectionType().toString());
-            statement.setString(2,mediaFile.getAbsolutePath().toString());
-            statement.setString(3,mediaFile.getBaseName());
-            statement.setString(4,mediaFile.getFileExtension());
-            statement.setString(5,mediaFile.getName());
-            statement.setString(6,mediaFile.getSourceType());
-            statement.setString(7,mediaFile.getSource());
-            statement.setString(8,mediaFile.getGroupName());
-            statement.setString(9,mediaFile.getTmdbId().toString());
-            if(mediaFile.getReleaseYear()==null) { statement.setNull(10, Types.INTEGER); } else {statement.setInt(10, mediaFile.getReleaseYear()); }
-            statement.setLong(11,mediaFile.getFileSize());
-            statement.setString(12,mediaFile.getReleaseDate());
-            statement.setString(13,mediaFile.getTmdbName());
-            statement.setString(14,mediaFile.getTmdbDescription());
-            statement.setString(15,mediaFile.getSeasonNumber());
-            statement.setString(16,mediaFile.getEpisodeNumber());
-            statement.setString(17,mediaFile.getEpisodeName());
-            statement.setString(18,mediaFile.getEpisodeOverview());
-            statement.setString(19,mediaFile.getResolution());
-            statement.setString(20,mediaFile.getHdrFormat());
-            statement.setString(21,mediaFile.getVideoCodec());
-            statement.setString(22,mediaFile.getAudioCodec());
-            statement.setString(23,mediaFile.getAudioChannels());
-            statement.executeUpdate();
+            int pending = 0;
+            for (MediaFile mediaFile : mediaFiles) {
+                bindMediaFile(statement, mediaFile);
+                statement.addBatch();
+                if (++pending == Constants.INSERT_BATCH_SIZE) {
+                    statement.executeBatch();
+                    pending = 0;
+                }
+            }
+            if (pending > 0) {
+                statement.executeBatch();
+            }
             if (!conn.getAutoCommit()) {
                 conn.commit();
             }
-            LOGGER.info("Inserted Record : {}",mediaFile.getAbsolutePath().toString());
+            LOGGER.info("Inserted {} record(s)", mediaFiles.size());
         } catch (SQLException e) {
-            LOGGER.error("Error inserting MediaFile: {}", mediaFile.getAbsolutePath(), e);
+            LOGGER.error("Error batch inserting {} MediaFile record(s)", mediaFiles.size(), e);
             throw e;
         }
+    }
+
+    private static void bindMediaFile(PreparedStatement statement, MediaFile mediaFile) throws SQLException {
+        statement.setString(1,mediaFile.getCollectionType().toString());
+        statement.setString(2,mediaFile.getAbsolutePath().toString());
+        statement.setString(3,mediaFile.getBaseName());
+        statement.setString(4,mediaFile.getFileExtension());
+        statement.setString(5,mediaFile.getName());
+        statement.setString(6,mediaFile.getSourceType());
+        statement.setString(7,mediaFile.getSource());
+        statement.setString(8,mediaFile.getGroupName());
+        statement.setString(9,mediaFile.getTmdbId().toString());
+        if(mediaFile.getReleaseYear()==null) { statement.setNull(10, Types.INTEGER); } else {statement.setInt(10, mediaFile.getReleaseYear()); }
+        statement.setLong(11,mediaFile.getFileSize());
+        statement.setString(12,mediaFile.getReleaseDate());
+        statement.setString(13,mediaFile.getTmdbName());
+        statement.setString(14,mediaFile.getTmdbDescription());
+        statement.setString(15,mediaFile.getSeasonNumber());
+        statement.setString(16,mediaFile.getEpisodeNumber());
+        statement.setString(17,mediaFile.getEpisodeName());
+        statement.setString(18,mediaFile.getEpisodeOverview());
+        statement.setString(19,mediaFile.getResolution());
+        statement.setString(20,mediaFile.getHdrFormat());
+        statement.setString(21,mediaFile.getVideoCodec());
+        statement.setString(22,mediaFile.getAudioCodec());
+        statement.setString(23,mediaFile.getAudioChannels());
     }
 
     /**

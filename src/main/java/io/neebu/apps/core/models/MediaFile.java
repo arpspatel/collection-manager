@@ -147,12 +147,13 @@ public class MediaFile {
         }
 
         // Parse video/audio metadata from file
-        MediaParser mediaParser = new MediaParser(absolutePath);
-        this.videoCodec = mediaParser.getVideoCodec();
-        this.resolution = mediaParser.getVideoFormat();
-        this.hdrFormat = mediaParser.getHdrFormat();
-        this.audioCodec = mediaParser.getAudioCodec();
-        this.audioChannels = mediaParser.getAudioChannels();
+        try (MediaParser mediaParser = new MediaParser(absolutePath)) {
+            this.videoCodec = mediaParser.getVideoCodec();
+            this.resolution = mediaParser.getVideoFormat();
+            this.hdrFormat = mediaParser.getHdrFormat();
+            this.audioCodec = mediaParser.getAudioCodec();
+            this.audioChannels = mediaParser.getAudioChannels();
+        }
         LOGGER.debug("Parsed media codecs for {}: video={}, audio={}, channels={}", baseName, videoCodec, audioCodec, audioChannels);
     }
 

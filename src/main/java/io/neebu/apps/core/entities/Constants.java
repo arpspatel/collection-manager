@@ -30,6 +30,11 @@ public class Constants {
             "blu\\-ray", "dvd\\-rip" };
     public static final Pattern TMDB_ID_PATTERN = Pattern.compile("(tmdbid|tmdb)[ ._-]?(\\d+)", Pattern.CASE_INSENSITIVE);
 
+    // Worker threads used to build/enrich files concurrently during a scan (network + native I/O bound).
+    public static final int SCAN_THREAD_POOL_SIZE = 8;
+    // Max rows per JDBC executeBatch() call during a bulk insert.
+    public static final int INSERT_BATCH_SIZE = 500;
+
     public static final String SELECT_MOVIES_SQL = "SELECT absolute_path FILE_PATH FROM collection WHERE collection_type = 'MOVIE'";
     public static final String SELECT_TV_SQL = "SELECT absolute_path FILE_PATH FROM collection WHERE collection_type = 'TV'";
 

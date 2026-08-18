@@ -6,6 +6,7 @@ import io.neebu.apps.core.entities.Constants;
 import io.neebu.apps.core.models.MediaFile;
 import io.neebu.apps.core.models.TmdbEpisode;
 import io.neebu.apps.core.models.TmdbTitle;
+import io.neebu.apps.utils.CollectionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,15 +70,17 @@ public class TvScanner {
             }
 
             long skipCount = fileActionMap.values().stream().filter("SKIP"::equals).count();
-            int addCount = 0;
 
-            // Only files that actually need to be added get parsed/probed at all -
-            // this is the existing DB-vs-folder logic doing its job.
-            List<MediaFile> filesToAdd = fileActionMap.entrySet().stream()
+            List<String> addPaths = fileActionMap.entrySet().stream()
                     .filter(e -> "ADD".equals(e.getValue()))
-                    .map(e -> buildMediaFile(e.getKey()))
-                    .filter(Objects::nonNull)
+                    .map(Map.Entry::getKey)
                     .toList();
+
+            // Only files that actually need to be added get parsed/probed at all - this is the
+            // existing DB-vs-folder logic doing its job. Each file's MediaInfo probe is
+            // independent of every other file's, so build them concurrently.
+            List<MediaFile> filesToAdd = CollectionUtils.parallelMap(addPaths, Constants.SCAN_THREAD_POOL_SIZE,
+                    TvScanner::buildMediaFile);
 
             // Group the new files by series so each show is looked up on TMDb exactly
             // once this run, regardless of how many of its episodes are new, and
@@ -89,35 +92,23 @@ public class TvScanner {
 
             LOGGER.info("Found {} new TV file(s) across {} distinct series", filesToAdd.size(), seriesGroups.size());
 
-            Map<String, TmdbTitle> seriesTitleCache = new HashMap<>();
+            // Each series group is independent of every other, so groups resolve/enrich
+            // concurrently; within a group the series lookup still happens exactly once.
+            List<GroupResult> groupResults = CollectionUtils.parallelMap(
+                    new ArrayList<>(seriesGroups.entrySet()), Constants.SCAN_THREAD_POOL_SIZE,
+                    group -> processSeriesGroup(appProperties, group.getKey(), group.getValue()));
 
-            for (Map.Entry<String, List<MediaFile>> group : seriesGroups.entrySet()) {
-                List<MediaFile> episodes = group.getValue();
+            List<MediaFile> readyToInsert = new ArrayList<>();
+            for (GroupResult result : groupResults) {
+                readyToInsert.addAll(result.readyToInsert());
+                skipCount += result.skipped();
+            }
 
-                // computeIfAbsent guarantees exactly one resolution attempt per series key
-                // for the lifetime of this run, however many episodes share that key.
-                TmdbTitle tmdbTitle = seriesTitleCache.computeIfAbsent(group.getKey(),
-                        k -> resolveSeriesTitle(appProperties, episodes));
+            databaseApp.insertBatch(readyToInsert);
+            int addCount = readyToInsert.size();
 
-                if (tmdbTitle == null) {
-                    LOGGER.warn("Skipping {} file(s) - could not resolve series '{}' on TMDb", episodes.size(), group.getKey());
-                    skipCount += episodes.size();
-                    continue;
-                }
-
-                for (MediaFile mediaFile : episodes) {
-                    try {
-                        LOGGER.info("Adding new TV file: {}", mediaFile.getAbsolutePath());
-                        enrichMediaWithTitle(mediaFile, tmdbTitle);
-                        fetchAndEnrichEpisode(appProperties, mediaFile);
-                        databaseApp.insert(mediaFile);
-                        addCount++;
-                        renameIfRequired(mediaFile, appProperties);
-                    } catch (Exception e) {
-                        LOGGER.error("Error handling TV file {}: {}", mediaFile.getAbsolutePath(), e.getMessage(), e);
-                        skipCount++;
-                    }
-                }
+            for (MediaFile mediaFile : readyToInsert) {
+                renameIfRequired(mediaFile, appProperties);
             }
 
             LOGGER.info("TV scan complete. Added={}, Deleted={}, Skipped={}", addCount, deleteCount, skipCount);
@@ -262,6 +253,41 @@ public class TvScanner {
             }
         }
         return null;
+    }
+
+    /**
+     * Result of resolving and enriching one series group: files ready for insertion, and a
+     * count of files skipped because the series itself couldn't be resolved on TMDb (or an
+     * individual episode failed while enriching).
+     */
+    private record GroupResult(List<MediaFile> readyToInsert, long skipped) {}
+
+    /**
+     * Resolves a series' TMDb title once, then enriches every episode in the group with it plus
+     * its own per-episode TMDb data. Runs as a single task per group so groups can be processed
+     * concurrently while each series is still looked up exactly once.
+     */
+    private static GroupResult processSeriesGroup(AppProperties appProperties, String seriesKey, List<MediaFile> episodes) {
+        TmdbTitle tmdbTitle = resolveSeriesTitle(appProperties, episodes);
+        if (tmdbTitle == null) {
+            LOGGER.warn("Skipping {} file(s) - could not resolve series '{}' on TMDb", episodes.size(), seriesKey);
+            return new GroupResult(List.of(), episodes.size());
+        }
+
+        List<MediaFile> ready = new ArrayList<>();
+        long skipped = 0;
+        for (MediaFile mediaFile : episodes) {
+            try {
+                LOGGER.info("Preparing new TV file: {}", mediaFile.getAbsolutePath());
+                enrichMediaWithTitle(mediaFile, tmdbTitle);
+                fetchAndEnrichEpisode(appProperties, mediaFile);
+                ready.add(mediaFile);
+            } catch (Exception e) {
+                LOGGER.error("Error handling TV file {}: {}", mediaFile.getAbsolutePath(), e.getMessage(), e);
+                skipped++;
+            }
+        }
+        return new GroupResult(ready, skipped);
     }
 
     /**
