@@ -109,17 +109,6 @@ public class CollectionUtils {
     }
 
     /**
-     * Checks if the input string contains any item from the provided list.
-     *
-     * @param inputStr The string to search in.
-     * @param items Array of items to search for.
-     * @return True if any item is found, false otherwise.
-     */
-    public static boolean stringContainsItemFromList(String inputStr, String[] items) {
-        return Arrays.stream(items).anyMatch(inputStr::contains);
-    }
-
-    /**
      * Converts a channel count string to a human-readable format (e.g., "5" to "4.1").
      *
      * @param channels The channel count as a string.
@@ -184,26 +173,6 @@ public class CollectionUtils {
 
 
         return normalized;
-    }
-
-    /**
-     * Removes illegal characters from a string for safe use as a filename.
-     *
-     * @param name The input string.
-     * @return The sanitized string.
-     */
-    public static String removeIllegalCharacters(String name) {
-        name = StringUtils.stripAccents(name)
-                .replaceAll("[^\\p{ASCII}]", " ")
-                .replace("&", "and")
-                .replace(" - ", "-")
-                .replace(". ", ".")
-                .replaceAll("'", "")
-                .replaceAll("[\\\\/:*?\"<>|,!]", " ")
-                .trim()
-                .replaceAll("\\s+", ".")
-                .replaceAll("\\.+$", "");
-        return name;
     }
 
     /**

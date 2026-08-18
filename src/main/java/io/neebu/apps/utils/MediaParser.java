@@ -12,6 +12,10 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
 
+/**
+ * MediaParser extracts video and audio metadata from media files using MediaInfo.
+ * It provides methods to retrieve codec, resolution, HDR format, and audio channel info.
+ */
 public class MediaParser {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MediaParser.class);
@@ -20,10 +24,15 @@ public class MediaParser {
     private static final String LANGUAGE = "Language";
     private static final String CODEC_ID = "CodecID";
 
-    private static final Set<String> ALLOWED_LANGUAGES = Set.of("en", "hi", "gu", "te", "ta", "ko", "ja", "zh", "mr");
+    private static final Set<String> ALLOWED_LANGUAGES = Set.of("en", "hi", "gu", "te", "ta", "ko", "ja", "zh", "mr","en-us","hi-in");
 
     private final MediaInfo mediaInfo;
 
+    /**
+     * Constructs a MediaParser for the given media file.
+     * @param filePath Path to the media file
+     * @throws IOException If the media file cannot be opened
+     */
     public MediaParser(Path filePath) throws IOException {
         LOGGER.debug("Initializing MediaParser for file: {}", filePath);
         MediaInfoLibrary library = MediaInfoLibrary.newInstance();
@@ -36,11 +45,15 @@ public class MediaParser {
         LOGGER.info("Media file loaded successfully: {}", filePath);
     }
 
+    /**
+     * Returns the video codec for the media file.
+     * @return Video codec string
+     */
     public String getVideoCodec() {
         String codecHint = safeGet(StreamType.Video, 0, "CodecID/Hint");
         String videoCodec = StringUtils.isBlank(codecHint) ? safeGet(StreamType.Video, 0, FORMAT) : codecHint;
 
-        if (StringUtils.containsIgnoreCase(videoCodec, "microsoft")) {
+        if (videoCodec != null && codecHint != null && videoCodec.toLowerCase().contains("microsoft")) {
             videoCodec = safeGet(StreamType.Video, 0, FORMAT);
         }
 
@@ -48,7 +61,7 @@ public class MediaParser {
         if ("XVID".equalsIgnoreCase(codecId)) return "XVID";
         if ("AVC".equalsIgnoreCase(videoCodec)) return "H264";
 
-        if (StringUtils.containsIgnoreCase(videoCodec, "mpeg")) {
+        if (videoCodec != null && videoCodec.toLowerCase().contains("mpeg")) {
             String versionStr = safeGet(StreamType.Video, 0, "Format_Version");
             try {
                 int version = Integer.parseInt(versionStr.replaceAll("\\D", ""));
@@ -61,6 +74,10 @@ public class MediaParser {
         return videoCodec;
     }
 
+    /**
+     * Returns the video resolution (e.g., 1080p, 2160p).
+     * @return Resolution string
+     */
     public String getVideoFormat() {
         try {
             int width = Integer.parseInt(safeGet(StreamType.Video, 0, "Width"));
@@ -72,6 +89,10 @@ public class MediaParser {
         }
     }
 
+    /**
+     * Returns the HDR format if present (e.g., DV, HDR, HLG).
+     * @return HDR format string
+     */
     public String getHdrFormat() {
         List<String> hdrFields = List.of("HDR_Format", "HDR_Format_String", "HDR_Format_Compatibility");
         String rawHdrData = hdrFields.stream()
@@ -81,25 +102,33 @@ public class MediaParser {
                 .orElse("");
 
         String hdrFormat = CollectionUtils.detectHdrFormat(rawHdrData);
-        if (StringUtils.isNotBlank(hdrFormat)) return hdrFormat;
+        if (hdrFormat != null && !hdrFormat.isBlank()) return hdrFormat;
 
         String transfer = safeGet(StreamType.Video, 0, "transfer_characteristics");
         hdrFormat = CollectionUtils.detectHdrFormat(transfer);
-        if (StringUtils.isNotBlank(hdrFormat)) return hdrFormat;
+        if (hdrFormat != null && !hdrFormat.isBlank()) return hdrFormat;
 
         String color = safeGet(StreamType.Video, 0, "colour_primaries");
-        if ((StringUtils.contains(color, "2100")) ||
-                (StringUtils.contains(transfer, "2100") || "PQ".equalsIgnoreCase(transfer) || "HLG".equalsIgnoreCase(transfer))) {
+        if ((color != null && color.contains("2100")) ||
+                (transfer != null && (transfer.contains("2100") || "PQ".equalsIgnoreCase(transfer) || "HLG".equalsIgnoreCase(transfer)))) {
             return "HDR";
         }
         return "";
     }
 
+    /**
+     * Returns the audio codec for the media file.
+     * @return Audio codec string
+     */
     public String getAudioCodec() {
         String[] audioInfo = parseAudioStream();
         return (audioInfo != null) ? audioInfo[0] : null;
     }
 
+    /**
+     * Returns the audio channel configuration (e.g., 5.1, 7.1).
+     * @return Audio channels string
+     */
     public String getAudioChannels() {
         String[] audioInfo = parseAudioStream();
         return (audioInfo != null && !"MP3".equalsIgnoreCase(audioInfo[0])) ? audioInfo[1] : null;
@@ -113,6 +142,7 @@ public class MediaParser {
             if (titleUpper.contains("COMMENT") || titleUpper.contains("COMPATIBILITY")) continue;
 
             String language = safeGet(StreamType.Audio, i, LANGUAGE);
+            LOGGER.info("language data: {}", language);
             if (!language.isBlank() && !ALLOWED_LANGUAGES.contains(language.toLowerCase(Locale.ROOT))) continue;
 
             String formatProfile = safeGet(StreamType.Audio, i, "Format_Profile");
@@ -121,6 +151,8 @@ public class MediaParser {
                     safeGet(StreamType.Audio, i, "Format_Commercial_IfAny"),
                     safeGet(StreamType.Audio, i, FORMAT)
             );
+
+            LOGGER.info("formatCommercial data: {}", formatCommercial);
             String features = safeGet(StreamType.Audio, i, "Format_AdditionalFeatures");
             String channels = CollectionUtils.getChannels(safeGet(StreamType.Audio, i, "Channels"));
 
@@ -160,4 +192,6 @@ public class MediaParser {
             return "";
         }
     }
+
+
 }

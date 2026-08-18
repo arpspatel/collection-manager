@@ -5,7 +5,7 @@ import java.util.regex.Pattern;
 
 public class Constants {
     public static final String DELIMITER       = "[\\[\\](){} _,.-]";
-    public static final String OTT_PLATFORMS = "AMZN,ATVP,BMS,DSNP,GPLAY,HS,HULU,JC,JSTAR,MA,MX,NF,SM,SONY,YTUBE,ZEE5,iT";
+    public static final String OTT_PLATFORMS = "AMZN,ATVP,BMS,DSNP,GPLAY,HS,HULU,JC,JSTAR,MA,MX,NF,SM,STAN,SONY,YTUBE,ZEE5,iTunes,LGP,HMAX,PMTP";
     public static final String WEB_DL_DEFAULT = "Hybrid";
 
     public static final Set<String> VIDEO_EXTENSIONS = Set.of(".mkv", ".mp4", ".avi");
@@ -28,7 +28,7 @@ public class Constants {
     // clean before splitting (needs delimiter in front!)
     public static final String[] CLEANWORDS      = { "24\\.000", "23\\.976", "23\\.98", "24\\.00", "web\\-dl", "web\\-rip", "blue\\-ray",
             "blu\\-ray", "dvd\\-rip" };
-    public static final Pattern  TMDB_ID_PATTERN = Pattern.compile("(tmdbid|tmdb)[ ._-]?(\\d+)", Pattern.CASE_INSENSITIVE);
+    public static final Pattern TMDB_ID_PATTERN = Pattern.compile("(tmdbid|tmdb)[ ._-]?(\\d+)", Pattern.CASE_INSENSITIVE);
 
     public static final String SELECT_MOVIES_SQL = "SELECT absolute_path FILE_PATH FROM collection WHERE collection_type = 'MOVIE'";
     public static final String SELECT_TV_SQL = "SELECT absolute_path FILE_PATH FROM collection WHERE collection_type = 'TV'";
