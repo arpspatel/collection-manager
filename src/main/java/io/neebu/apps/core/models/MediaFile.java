@@ -32,8 +32,9 @@ public class MediaFile {
     // Logger for debugging and info
     private static final Logger LOGGER = LoggerFactory.getLogger(MediaFile.class.getName());
 
-    // Absolute path to the media file
-    private final Path absolutePath;
+    // Absolute path to the media file - not final: updated after a successful on-disk rename
+    // so the DB insert (which happens after renaming) records where the file actually ended up.
+    private Path absolutePath;
     // Type of collection (MOVIE or TV)
     private final Constants.CollectionType collectionType;
 
@@ -106,8 +107,8 @@ public class MediaFile {
         // Parse metadata from filename
         MediaMetadata mediaMetadata = new MediaMetadata(baseName);
         this.name = mediaMetadata.getTitle();
-        this.seasonNumber = mediaMetadata.getSeason();
-        this.episodeNumber = mediaMetadata.getEpisode();
+        this.seasonNumber = CollectionUtils.zeroPad(mediaMetadata.getSeason(), 2);
+        this.episodeNumber = CollectionUtils.zeroPad(mediaMetadata.getEpisode(), 2);
         this.releaseYear = StringUtils.isNumeric(mediaMetadata.getYear()) ? Integer.valueOf(mediaMetadata.getYear()) : null;
 
         // Use local variables for sourceType and source
@@ -169,9 +170,11 @@ public class MediaFile {
         }
 
         // Build type-specific parts (movie: year, TV: season/episode)
+        String seasonEpisodeTag = StringUtils.isNotBlank(seasonNumber) && StringUtils.isNotBlank(episodeNumber)
+                ? "S" + seasonNumber + "E" + episodeNumber : null;
         Stream<String> typeSpecificParts = collectionType.equals(Constants.CollectionType.MOVIE)
                 ? Stream.of(releaseYear != null ? releaseYear.toString() : null)
-                : Stream.of("S" + seasonNumber + "E" + episodeNumber, CollectionUtils.cleanString(episodeName));
+                : Stream.of(seasonEpisodeTag, CollectionUtils.cleanString(episodeName));
 
         // Build codec parts for filename
         Stream<String> codecParts = Stream.of(hdrFormat, videoCodec, audioCodec, audioChannels);
@@ -199,5 +202,12 @@ public class MediaFile {
         } else {
             LOGGER.debug("File {} does not require renaming.", absolutePath);
         }
+    }
+
+    /**
+     * Updates the tracked path after a successful on-disk move/rename.
+     */
+    public void updateAbsolutePath(Path newPath) {
+        this.absolutePath = newPath;
     }
 }

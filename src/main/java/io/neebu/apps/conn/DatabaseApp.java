@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * DatabaseApp provides methods to interact with the media database.
@@ -81,7 +82,7 @@ public class DatabaseApp implements AutoCloseable {
             for (MediaFile mediaFile : mediaFiles) {
                 bindMediaFile(statement, mediaFile);
                 statement.addBatch();
-                if (++pending == Constants.INSERT_BATCH_SIZE) {
+                if (++pending == Constants.JDBC_BATCH_SIZE) {
                     statement.executeBatch();
                     pending = 0;
                 }
@@ -95,6 +96,41 @@ public class DatabaseApp implements AutoCloseable {
             LOGGER.info("Inserted {} record(s)", mediaFiles.size());
         } catch (SQLException e) {
             LOGGER.error("Error batch inserting {} MediaFile record(s)", mediaFiles.size(), e);
+            throw e;
+        }
+    }
+
+    /**
+     * Updates ABSOLUTE_PATH for records whose file was renamed outside the normal insert flow
+     * (e.g. an episode-padding repad touching files already catalogued from a prior run).
+     * @param oldToNewPath Map of previous absolute path to new absolute path.
+     */
+    @SneakyThrows
+    public void updatePaths(Map<String, String> oldToNewPath) {
+        if (oldToNewPath.isEmpty()) {
+            return;
+        }
+        LOGGER.debug("Batch updating {} path(s)", oldToNewPath.size());
+        try (PreparedStatement statement = conn.prepareStatement(Constants.UPDATE_PATH_SQL)) {
+            int pending = 0;
+            for (Map.Entry<String, String> entry : oldToNewPath.entrySet()) {
+                statement.setString(1, entry.getValue());
+                statement.setString(2, entry.getKey());
+                statement.addBatch();
+                if (++pending == Constants.JDBC_BATCH_SIZE) {
+                    statement.executeBatch();
+                    pending = 0;
+                }
+            }
+            if (pending > 0) {
+                statement.executeBatch();
+            }
+            if (!conn.getAutoCommit()) {
+                conn.commit();
+            }
+            LOGGER.info("Updated {} path(s)", oldToNewPath.size());
+        } catch (SQLException e) {
+            LOGGER.error("Error batch updating {} path(s)", oldToNewPath.size(), e);
             throw e;
         }
     }

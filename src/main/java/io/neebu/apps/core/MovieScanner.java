@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -61,20 +62,24 @@ public class MovieScanner {
                     filePath -> buildAndEnrichMovie(filePath, appProperties));
             skipCount += addPaths.size() - readyToInsert.size();
 
-            databaseApp.insertBatch(readyToInsert);
-            int addCount = readyToInsert.size();
-
+            // Rename before inserting, so the DB row records the file's final on-disk path
+            // rather than its pre-rename scan-time path.
             for (MediaFile mediaFile : readyToInsert) {
                 mediaFile.applyNamingConvention();
                 if (mediaFile.isRenameRequired() && appProperties.isRenameMovies()) {
+                    Path target = mediaFile.getNormalizedTitle();
                     try {
-                        LOGGER.info("Renaming movie: {} → {}", mediaFile.getAbsolutePath(), mediaFile.getNormalizedTitle());
-                        Files.move(mediaFile.getAbsolutePath(), mediaFile.getNormalizedTitle());
+                        LOGGER.info("Renaming movie: {} → {}", mediaFile.getAbsolutePath(), target);
+                        Files.move(mediaFile.getAbsolutePath(), target);
+                        mediaFile.updateAbsolutePath(target);
                     } catch (Exception e) {
-                        LOGGER.error("Failed to rename file {} to {}: {}", mediaFile.getAbsolutePath(), mediaFile.getNormalizedTitle(), e.getMessage());
+                        LOGGER.error("Failed to rename file {} to {}: {}", mediaFile.getAbsolutePath(), target, e.getMessage());
                     }
                 }
             }
+
+            databaseApp.insertBatch(readyToInsert);
+            int addCount = readyToInsert.size();
 
             LOGGER.info("Movie scan complete. Added={}, Deleted={}, Skipped={}", addCount, deleteCount, skipCount);
         } catch (Exception e) {

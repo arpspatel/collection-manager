@@ -32,8 +32,8 @@ public class Constants {
 
     // Worker threads used to build/enrich files concurrently during a scan (network + native I/O bound).
     public static final int SCAN_THREAD_POOL_SIZE = 8;
-    // Max rows per JDBC executeBatch() call during a bulk insert.
-    public static final int INSERT_BATCH_SIZE = 500;
+    // Max rows per JDBC executeBatch() call during a bulk insert/update.
+    public static final int JDBC_BATCH_SIZE = 500;
 
     public static final String SELECT_MOVIES_SQL = "SELECT absolute_path FILE_PATH FROM collection WHERE collection_type = 'MOVIE'";
     public static final String SELECT_TV_SQL = "SELECT absolute_path FILE_PATH FROM collection WHERE collection_type = 'TV'";
@@ -41,6 +41,7 @@ public class Constants {
     public static final String INSERT_MEDIA_SQL = "INSERT INTO collection ( COLLECTION_TYPE ,ABSOLUTE_PATH ,FILE_NAME ,FILE_EXTENSION ,NAME ,SOURCE_TYPE ,SOURCE ,GROUP_NAME ,TMDB_ID ,RELEASE_YEAR ,FILE_SIZE ,RELEASE_DATE ,TMDB_NAME ,TMDB_DESCRIPTION ,SEASON_NUMBER ,EPISODE_NUMBER ,EPISODE_NAME ,EPISODE_OVERVIEW ,RESOLUTION ,HDR_FORMAT ,VIDEO_CODEC ,AUDIO_CODEC ,AUDIO_CHANNELS )\n" +
             "VALUES ( ? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? )";
     public static final String DELETE_MEDIA_SQL = "DELETE FROM collection WHERE ABSOLUTE_PATH = ?";
+    public static final String UPDATE_PATH_SQL = "UPDATE collection SET ABSOLUTE_PATH = ? WHERE ABSOLUTE_PATH = ?";
 
 
     public enum CollectionType {

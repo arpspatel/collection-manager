@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -104,11 +105,17 @@ public class TvScanner {
                 skipCount += result.skipped();
             }
 
+            // Rename before inserting, so the DB row records the file's final on-disk path
+            // rather than its pre-rename scan-time path.
+            for (MediaFile mediaFile : readyToInsert) {
+                renameIfRequired(mediaFile, appProperties);
+            }
+
             databaseApp.insertBatch(readyToInsert);
             int addCount = readyToInsert.size();
 
-            for (MediaFile mediaFile : readyToInsert) {
-                renameIfRequired(mediaFile, appProperties);
+            if (appProperties.isRenameTv()) {
+                repadEpisodeNumbersIfNeeded(readyToInsert, databaseApp);
             }
 
             LOGGER.info("TV scan complete. Added={}, Deleted={}, Skipped={}", addCount, deleteCount, skipCount);
@@ -332,10 +339,88 @@ public class TvScanner {
             try {
                 LOGGER.info("Renaming TV file: {} → {}", source, target);
                 Files.move(source, target);
+                mediaFile.updateAbsolutePath(target);
             } catch (Exception e) {
                 LOGGER.error("Failed to rename file {} to {}: {}", source, target, e.getMessage());
             }
         }
+    }
+
+    /** Matches this tool's own "S<season>E<episode>" naming tag, capturing the episode digits. */
+    private static final Pattern EPISODE_TAG_PATTERN = Pattern.compile("S\\d+E(\\d+)");
+
+    /**
+     * For every folder touched by this run's new episodes, checks whether the folder's current
+     * episode count now calls for wider zero-padding (3 digits at 100+ episodes, 4 at 1000+) than
+     * what the files already sitting there use, and if so, repads every recognized episode file
+     * in that folder to match - keeping a season/show's numbering consistent as it grows, without
+     * an extra TMDb call (the folder's own file count is the only input).
+     */
+    private static void repadEpisodeNumbersIfNeeded(List<MediaFile> addedFiles, DatabaseApp databaseApp) {
+        Set<Path> touchedFolders = addedFiles.stream()
+                .map(MediaFile::getFolderName)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        for (Path folder : touchedFolders) {
+            repadFolder(folder, databaseApp);
+        }
+    }
+
+    private static void repadFolder(Path folder, DatabaseApp databaseApp) {
+        List<Path> videoFiles;
+        try (Stream<Path> stream = Files.list(folder)) {
+            videoFiles = stream
+                    .filter(Files::isRegularFile)
+                    .filter(path -> {
+                        String fileName = path.getFileName().toString().toLowerCase(Locale.ROOT);
+                        return Constants.VIDEO_EXTENSIONS.stream().anyMatch(fileName::endsWith);
+                    })
+                    .toList();
+        } catch (Exception e) {
+            LOGGER.warn("Could not list folder {} for episode repadding: {}", folder, e.getMessage());
+            return;
+        }
+
+        int requiredWidth = videoFiles.size() >= 1000 ? 4 : videoFiles.size() >= 100 ? 3 : 2;
+
+        Map<Path, Matcher> episodeTags = new LinkedHashMap<>();
+        boolean needsRepad = false;
+        for (Path file : videoFiles) {
+            Matcher matcher = EPISODE_TAG_PATTERN.matcher(file.getFileName().toString());
+            if (matcher.find()) {
+                episodeTags.put(file, matcher);
+                if (matcher.group(1).length() < requiredWidth) {
+                    needsRepad = true;
+                }
+            }
+        }
+        if (!needsRepad) {
+            return;
+        }
+
+        LOGGER.info("Repadding episode numbers in {} to {} digit(s) ({} file(s) in folder)", folder, requiredWidth, videoFiles.size());
+        Map<String, String> pathUpdates = new LinkedHashMap<>();
+        for (Map.Entry<Path, Matcher> entry : episodeTags.entrySet()) {
+            Path source = entry.getKey();
+            Matcher matcher = entry.getValue();
+            String paddedEpisode = CollectionUtils.zeroPad(matcher.group(1), requiredWidth);
+            if (paddedEpisode.equals(matcher.group(1))) {
+                continue;
+            }
+            String newName = new StringBuilder(source.getFileName().toString())
+                    .replace(matcher.start(1), matcher.end(1), paddedEpisode)
+                    .toString();
+            Path target = source.resolveSibling(newName);
+            try {
+                Files.move(source, target);
+                pathUpdates.put(source.toString(), target.toString());
+            } catch (Exception e) {
+                LOGGER.error("Failed to repad {} to {}: {}", source, target, e.getMessage());
+            }
+        }
+
+        databaseApp.updatePaths(pathUpdates);
     }
 
     /**

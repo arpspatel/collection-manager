@@ -180,6 +180,22 @@ public class CollectionUtils {
     }
 
     /**
+     * Left-pads a numeric string with zeros to at least the given width. Blank input and
+     * already-wide values (e.g. a 4-digit absolute episode number) are returned unchanged -
+     * this only widens, never truncates.
+     *
+     * @param value Numeric string to pad.
+     * @param width Minimum width.
+     * @return The padded string, or the original value if blank or already wide enough.
+     */
+    public static String zeroPad(String value, int width) {
+        if (StringUtils.isBlank(value) || value.length() >= width) {
+            return value;
+        }
+        return "0".repeat(width - value.length()) + value;
+    }
+
+    /**
      * Cleans a string for safe use in filenames or identifiers.
      *
      * Steps:
