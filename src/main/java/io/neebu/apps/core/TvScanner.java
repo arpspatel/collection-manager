@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -80,8 +81,9 @@ public class TvScanner {
             // Only files that actually need to be added get parsed/probed at all - this is the
             // existing DB-vs-folder logic doing its job. Each file's MediaInfo probe is
             // independent of every other file's, so build them concurrently.
+            List<String> skipDetails = new CopyOnWriteArrayList<>();
             List<MediaFile> filesToAdd = CollectionUtils.parallelMap(addPaths, Constants.SCAN_THREAD_POOL_SIZE,
-                    TvScanner::buildMediaFile);
+                    filePath -> buildMediaFile(filePath, skipDetails));
 
             // Group the new files by series so each show is looked up on TMDb exactly
             // once this run, regardless of how many of its episodes are new, and
@@ -102,8 +104,9 @@ public class TvScanner {
             List<MediaFile> readyToInsert = new ArrayList<>();
             for (GroupResult result : groupResults) {
                 readyToInsert.addAll(result.readyToInsert());
-                skipCount += result.skipped();
+                skipDetails.addAll(result.skipReasons());
             }
+            skipCount += skipDetails.size();
 
             // Rename before inserting, so the DB row records the file's final on-disk path
             // rather than its pre-rename scan-time path.
@@ -119,6 +122,10 @@ public class TvScanner {
             }
 
             LOGGER.info("TV scan complete. Added={}, Deleted={}, Skipped={}", addCount, deleteCount, skipCount);
+            if (!skipDetails.isEmpty()) {
+                LOGGER.warn("{} file(s) skipped due to errors or unresolved TMDb lookups:\n{}",
+                        skipDetails.size(), String.join("\n", skipDetails));
+            }
         } catch (Exception e) {
             LOGGER.error("Failed to complete TV scan: {}", e.getMessage(), e);
         }
@@ -126,13 +133,15 @@ public class TvScanner {
 
     /**
      * Builds a MediaFile for a path flagged ADD, logging and skipping on failure
-     * (e.g. unreadable file) rather than aborting the whole run.
+     * (e.g. unreadable file) rather than aborting the whole run. The failure reason
+     * is also recorded in {@code skipDetails} so it can be surfaced in the end-of-run summary.
      */
-    private static MediaFile buildMediaFile(String filePath) {
+    private static MediaFile buildMediaFile(String filePath, List<String> skipDetails) {
         try {
             return new MediaFile(Paths.get(filePath), Constants.CollectionType.TV);
         } catch (Exception e) {
             LOGGER.error("Could not read media file {}: {}", filePath, e.getMessage(), e);
+            skipDetails.add(filePath + ": could not read media file - " + e.getMessage());
             return null;
         }
     }
@@ -263,11 +272,11 @@ public class TvScanner {
     }
 
     /**
-     * Result of resolving and enriching one series group: files ready for insertion, and a
-     * count of files skipped because the series itself couldn't be resolved on TMDb (or an
-     * individual episode failed while enriching).
+     * Result of resolving and enriching one series group: files ready for insertion, and the
+     * reasons for any files skipped because the series itself couldn't be resolved on TMDb (or
+     * an individual episode failed while enriching).
      */
-    private record GroupResult(List<MediaFile> readyToInsert, long skipped) {}
+    private record GroupResult(List<MediaFile> readyToInsert, List<String> skipReasons) {}
 
     /**
      * Resolves a series' TMDb title once, then enriches every episode in the group with it plus
@@ -278,11 +287,14 @@ public class TvScanner {
         TmdbTitle tmdbTitle = resolveSeriesTitle(appProperties, episodes);
         if (tmdbTitle == null) {
             LOGGER.warn("Skipping {} file(s) - could not resolve series '{}' on TMDb", episodes.size(), seriesKey);
-            return new GroupResult(List.of(), episodes.size());
+            List<String> reasons = episodes.stream()
+                    .map(mediaFile -> mediaFile.getAbsolutePath() + ": could not resolve series '" + seriesKey + "' on TMDb")
+                    .toList();
+            return new GroupResult(List.of(), reasons);
         }
 
         List<MediaFile> ready = new ArrayList<>();
-        long skipped = 0;
+        List<String> skipReasons = new ArrayList<>();
         for (MediaFile mediaFile : episodes) {
             try {
                 LOGGER.info("Preparing new TV file: {}", mediaFile.getAbsolutePath());
@@ -291,10 +303,10 @@ public class TvScanner {
                 ready.add(mediaFile);
             } catch (Exception e) {
                 LOGGER.error("Error handling TV file {}: {}", mediaFile.getAbsolutePath(), e.getMessage(), e);
-                skipped++;
+                skipReasons.add(mediaFile.getAbsolutePath() + ": " + e.getMessage());
             }
         }
-        return new GroupResult(ready, skipped);
+        return new GroupResult(ready, skipReasons);
     }
 
     /**

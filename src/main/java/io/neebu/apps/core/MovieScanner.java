@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -58,9 +59,10 @@ public class MovieScanner {
 
             // Build + TMDb-enrich each new movie concurrently (independent per file); DB writes
             // stay single-threaded on this connection.
+            List<String> skipDetails = new CopyOnWriteArrayList<>();
             List<MediaFile> readyToInsert = CollectionUtils.parallelMap(addPaths, Constants.SCAN_THREAD_POOL_SIZE,
-                    filePath -> buildAndEnrichMovie(filePath, appProperties));
-            skipCount += addPaths.size() - readyToInsert.size();
+                    filePath -> buildAndEnrichMovie(filePath, appProperties, skipDetails));
+            skipCount += skipDetails.size();
 
             // Rename before inserting, so the DB row records the file's final on-disk path
             // rather than its pre-rename scan-time path.
@@ -82,6 +84,10 @@ public class MovieScanner {
             int addCount = readyToInsert.size();
 
             LOGGER.info("Movie scan complete. Added={}, Deleted={}, Skipped={}", addCount, deleteCount, skipCount);
+            if (!skipDetails.isEmpty()) {
+                LOGGER.warn("{} file(s) skipped due to errors or unresolved TMDb lookups:\n{}",
+                        skipDetails.size(), String.join("\n", skipDetails));
+            }
         } catch (Exception e) {
             LOGGER.error("Failed to complete movie scan: {}", e.getMessage(), e);
         }
@@ -89,9 +95,10 @@ public class MovieScanner {
 
     /**
      * Builds a MediaFile and resolves its TMDb title. Returns null (logged) on any failure so
-     * one bad file doesn't abort the run.
+     * one bad file doesn't abort the run. The failure reason is also recorded in
+     * {@code skipDetails} so it can be surfaced in the end-of-run summary.
      */
-    private static MediaFile buildAndEnrichMovie(String filePath, AppProperties appProperties) {
+    private static MediaFile buildAndEnrichMovie(String filePath, AppProperties appProperties, List<String> skipDetails) {
         try {
             LOGGER.info("Adding new movie file: {}", filePath);
             MediaFile mediaFile = new MediaFile(Paths.get(filePath), Constants.CollectionType.MOVIE);
@@ -99,6 +106,7 @@ public class MovieScanner {
             TmdbTitle tmdbTitle = fetchMovieTitle(appProperties, mediaFile);
             if (tmdbTitle == null) {
                 LOGGER.warn("Skipping movie due to missing TMDb info: {}", filePath);
+                skipDetails.add(filePath + ": could not resolve movie on TMDb");
                 return null;
             }
 
@@ -106,6 +114,7 @@ public class MovieScanner {
             return mediaFile;
         } catch (Exception e) {
             LOGGER.error("Error handling movie {}: {}", filePath, e.getMessage(), e);
+            skipDetails.add(filePath + ": " + e.getMessage());
             return null;
         }
     }
