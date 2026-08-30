@@ -21,6 +21,7 @@ buildNumber.properties
 
 # Local scan/debug output
 file.csv
+logs/
 
 # Contains real API keys / DB credentials - use application.properties.example as a template
 src/main/resources/application.properties
