@@ -95,9 +95,10 @@ public class MediaFile {
      * Constructs a MediaFile and parses metadata from the filename and path.
      * @param absolutePath Absolute path to the media file
      * @param collectionType Type of collection (MOVIE or TV)
+     * @param mediaInfoExecutable Path/command used to invoke the mediainfo CLI
      * @throws IOException if file size cannot be read
      */
-    public MediaFile(Path absolutePath, Constants.CollectionType collectionType) throws IOException {
+    public MediaFile(Path absolutePath, Constants.CollectionType collectionType, String mediaInfoExecutable) throws IOException {
         this.absolutePath = absolutePath;
         this.collectionType = collectionType;
         this.folderName = absolutePath.getParent();
@@ -148,7 +149,7 @@ public class MediaFile {
         }
 
         // Parse video/audio metadata from file
-        try (MediaParser mediaParser = new MediaParser(absolutePath)) {
+        try (MediaParser mediaParser = new MediaParser(absolutePath, mediaInfoExecutable)) {
             this.videoCodec = mediaParser.getVideoCodec();
             this.resolution = mediaParser.getVideoFormat();
             this.hdrFormat = mediaParser.getHdrFormat();

@@ -10,3 +10,6 @@ tmdb.api.uri=https://api.themoviedb.org/3
 database.url=jdbc:mariadb://HOST:3306/dcollection
 database.user=YOUR_DB_USER
 database.pass=YOUR_DB_PASSWORD
+# Optional - only needed if the mediainfo CLI isn't on this process's PATH.
+# Leave unset to just run "mediainfo" via PATH (the default).
+# mediainfo.path=/absolute/path/to/mediainfo

@@ -101,7 +101,7 @@ public class MovieScanner {
     private static MediaFile buildAndEnrichMovie(String filePath, AppProperties appProperties, List<String> skipDetails) {
         try {
             LOGGER.info("Adding new movie file: {}", filePath);
-            MediaFile mediaFile = new MediaFile(Paths.get(filePath), Constants.CollectionType.MOVIE);
+            MediaFile mediaFile = new MediaFile(Paths.get(filePath), Constants.CollectionType.MOVIE, appProperties.getMediaInfoPath());
 
             TmdbTitle tmdbTitle = fetchMovieTitle(appProperties, mediaFile);
             if (tmdbTitle == null) {

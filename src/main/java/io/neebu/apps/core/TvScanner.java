@@ -83,7 +83,7 @@ public class TvScanner {
             // independent of every other file's, so build them concurrently.
             List<String> skipDetails = new CopyOnWriteArrayList<>();
             List<MediaFile> filesToAdd = CollectionUtils.parallelMap(addPaths, Constants.SCAN_THREAD_POOL_SIZE,
-                    filePath -> buildMediaFile(filePath, skipDetails));
+                    filePath -> buildMediaFile(filePath, skipDetails, appProperties.getMediaInfoPath()));
 
             // Group the new files by series so each show is looked up on TMDb exactly
             // once this run, regardless of how many of its episodes are new, and
@@ -136,9 +136,9 @@ public class TvScanner {
      * (e.g. unreadable file) rather than aborting the whole run. The failure reason
      * is also recorded in {@code skipDetails} so it can be surfaced in the end-of-run summary.
      */
-    private static MediaFile buildMediaFile(String filePath, List<String> skipDetails) {
+    private static MediaFile buildMediaFile(String filePath, List<String> skipDetails, String mediaInfoExecutable) {
         try {
-            return new MediaFile(Paths.get(filePath), Constants.CollectionType.TV);
+            return new MediaFile(Paths.get(filePath), Constants.CollectionType.TV, mediaInfoExecutable);
         } catch (Exception e) {
             LOGGER.error("Could not read media file {}: {}", filePath, e.getMessage(), e);
             skipDetails.add(filePath + ": could not read media file - " + e.getMessage());
