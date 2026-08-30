@@ -6,10 +6,13 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.CodeSource;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 
 @Getter
@@ -33,13 +36,12 @@ public class AppProperties {
     private String mediaInfoPath = "mediainfo";
 
     public AppProperties(){
-        try (InputStream input = AppProperties.class.getClassLoader().getResourceAsStream("application.properties")) {
+        try (InputStream input = openConfigStream()) {
             Properties prop = new Properties();
             if (input == null) {
                 System.out.println("Sorry, unable to find application.properties");
                 return;
             }
-            // Load a properties file from class path, inside static method
             prop.load(input);
             this.parseMovies = prop.getProperty("library.movies.enabled").equals("true");
             this.parseTv = prop.getProperty("library.tv.enabled").equals("true");
@@ -64,6 +66,40 @@ public class AppProperties {
 
         } catch (IOException ex) {
             ex.printStackTrace();
+        }
+    }
+
+    /**
+     * Prefers an application.properties sitting next to the running jar (so config can be
+     * changed per-machine without repackaging), falling back to the one bundled on the
+     * classpath - which is also what a run from an IDE/exploded classes directory always uses,
+     * since there's no meaningful "next to the jar" location in that case.
+     */
+    private static InputStream openConfigStream() throws IOException {
+        Path externalPath = jarDirectory().map(dir -> dir.resolve("application.properties")).orElse(null);
+        if (externalPath != null && Files.isRegularFile(externalPath)) {
+            LOGGER.info("Loading configuration from {}", externalPath);
+            return Files.newInputStream(externalPath);
+        }
+        LOGGER.info("No application.properties found next to the jar - using the one bundled in the jar");
+        return AppProperties.class.getClassLoader().getResourceAsStream("application.properties");
+    }
+
+    /**
+     * @return the directory containing the running jar, or empty if not running from a jar
+     *         (e.g. launched from an IDE/exploded classes directory).
+     */
+    private static Optional<Path> jarDirectory() {
+        try {
+            CodeSource codeSource = AppProperties.class.getProtectionDomain().getCodeSource();
+            if (codeSource == null) {
+                return Optional.empty();
+            }
+            Path location = Path.of(codeSource.getLocation().toURI());
+            return Files.isRegularFile(location) ? Optional.of(location.getParent()) : Optional.empty();
+        } catch (URISyntaxException | RuntimeException e) {
+            LOGGER.debug("Could not resolve jar location: {}", e.getMessage());
+            return Optional.empty();
         }
     }
 }

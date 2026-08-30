@@ -1,4 +1,7 @@
-
+# When running the packaged jar (java -jar collection-manager.jar), drop a real
+# application.properties in the SAME FOLDER as the jar - it takes priority over
+# this bundled copy, so one jar can be deployed to multiple machines with
+# different config (paths, DB, mediainfo location) without repackaging.
 library.movies.enabled=true
 library.movies.paths=Y:/kids,Y:/others,Y:/hindi,Y:/english
 library.movies.rename=true
